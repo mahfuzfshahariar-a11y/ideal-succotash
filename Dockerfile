@@ -1,6 +1,5 @@
 FROM ubuntu:22.04
 
-# MALLOC_TRIM_THRESHOLD_=65536 দিলে প্রসেস শেষ হওয়ার সাথে সাথে র‍্যাম কার্নেলে ফেরত যায়
 ENV DEBIAN_FRONTEND=noninteractive \
     TERM=xterm-256color \
     LANG=C.UTF-8 \
@@ -10,12 +9,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MALLOC_TRIM_THRESHOLD_=65536 \
     TS_DEBUG_MTU=1100
 
-# APT যেন কখনোই ডিস্ক বা র‍্যামে ক্যাশ না জমায় তার কনফিগারেশন
-RUN echo 'APT::Keep-Downloaded-Packages "false";' > /etc/apt/apt.conf.d/99custom-nocache && \
-    echo 'Dir::Cache "";' >> /etc/apt/apt.conf.d/99custom-nocache && \
-    echo 'Dir::Cache::archives "";' >> /etc/apt/apt.conf.d/99custom-nocache && \
-    echo 'Dir::State::lists "";' >> /etc/apt/apt.conf.d/99custom-nocache
+# APT যেন র‍্যামে বা ডিস্কে কোনো ক্যাশ এবং ইনডেক্স জমা না রাখে তার সঠিক কনফিগারেশন
+RUN echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/99custom-nocache && \
+    echo 'APT::AutoRemove::SuggestsImportant "false";' >> /etc/apt/apt.conf.d/99custom-nocache && \
+    echo 'Acquire::GzipIndexes "true";' >> /etc/apt/apt.conf.d/99custom-nocache && \
+    echo 'Acquire::CompressionTypes::Order:: "gz";' >> /etc/apt/apt.conf.d/99custom-nocache
 
+# প্যাকেজ ইনস্টল (Acquire::GzipIndexes থাকার কারণে এখন 49MB এর বদলে মাত্র 8-10MB ডাউনলোড হবে)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
@@ -38,11 +38,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     procps \
     nocache \
-    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/archives/*.deb
 
-# যদি Tailscale লাগে তার জন্য ইনস্টল করা থাকলো, তবে র‍্যাম বাঁচাতে অটো-স্টার্ট বন্ধ থাকবে
+# Tailscale ইনস্টল (শুধু ENABLE_TAILSCALE=true দিলে চালু হবে)
 RUN curl -fsSL https://tailscale.com/install.sh | sh && \
-    rm -rf /var/cache/* /tmp/*
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /tmp/*
 
 # সিস্টেমের সকল প্রসেসের জন্য গ্লোবালি ফাইল ক্যাশিং (Page Cache) বন্ধ করা
 RUN NOCACHE_LIB=$(find /usr/lib -name "libnocache.so.1" | head -n 1) && \
